@@ -93,7 +93,8 @@ Before submitting, check that the profile:
 - defines a concrete 0-10 rubric in `analysis.md`,
 - keeps generated blocks specific, non-overlapping, and grounded in supplied
   content or declared tools,
-- contains no credentials, private sources, or user-specific thresholds, and
+- contains no credentials, private sources, user-specific thresholds, or the
+  local console's `.user-profile` marker, and
 - passes `uv run pytest tests/test_profiles.py tests/test_prompting.py -q`.
 
 Built-in profiles are loaded as automatic-routing candidates, so maintainers may
@@ -234,6 +235,122 @@ All source types support profile routing. For sources with nested entries, put
 Reddit subreddit or user, or OpenBB watchlist. Top-level single configurations,
 such as Hacker News, Twitter, OSS Insight, GDELT, and Google News, carry the
 field directly.
+
+## Local Console
+
+An optional browser console manages profiles and profile routing on the machine
+that holds your configuration. Start it from the directory where you run
+`horizon`, with the same data and config options:
+
+```bash
+uv run python -m src.web.server [--port 8765] [-d PATH] [-c PATH]
+```
+
+Open the printed `http://127.0.0.1:8765/` address. The console has no login, so
+`--host` accepts only loopback addresses such as `127.0.0.1`, `::1`, or
+`localhost`. It answers only requests whose `Host` header names a loopback
+address on the console's port, requires a
+same-origin request and a per-start CSRF token for every change, and loads no
+external assets. Do not expose it through a proxy or port forwarding.
+Configuration responses include only the default profile, profile settings, and
+each source's name, enabled state, and route; they never include source URLs,
+credentials, or other configuration values.
+
+### Profile Lifecycle
+
+- **Create** a profile from a new ID, or **copy** any loaded profile to a new ID.
+  The console writes the four-file layout plus a `.user-profile` marker file
+  to `profiles/<id>/`.
+- **Edit** and **delete** work only on profiles with that marker. Built-in
+  profiles and directories added by hand are read-only in the console; copy
+  them to make changes.
+- Profile IDs cannot be changed. They start with a lowercase letter and use at
+  most 64 lowercase letters, digits, `_`, or `-`; `auto` and Windows device
+  names are reserved. Prompt file names are fixed to `match.md`, `analysis.md`,
+  and `enrichment.md`.
+
+When profiles fall back to the packaged built-in resources (an installed
+package without a `profiles/` directory), or the profile directory is not
+writable, the console is read-only. Set `processing.profiles_dir` to a writable
+directory to manage profiles.
+
+### Validation and Deletion
+
+Every save validates `profile.json` against the schema above, rejects unknown
+tools and empty prompts, and then loads a fresh registry from a copy of the
+whole profile directory with the change applied. Files are written only after
+that check passes, so a rejected save leaves the existing profile unchanged. A
+new profile appears through a single directory rename.
+
+An edit prepares a complete replacement directory in a hidden `.console-*` work
+directory first: the new `profile.json` and prompts keep the permission bits of
+the files they replace, and the marker and any other files in the profile
+directory are copied with their contents and permission bits (not their owner
+or extended attributes). A failure while preparing leaves the profile
+untouched. If anything in the profile directory changed while it was being
+copied, the save is rejected. The console then renames the profile directory to
+a hidden backup and renames the replacement into its place. If the second
+rename fails, the backup is renamed back; if that also fails, the error names
+the backup directory that still holds the previous files, so do not delete that
+backup until you have restored it. Between the two renames, which normally take
+microseconds, the profile directory does not exist, so a pipeline run starting
+at that instant may not find the profile. A program that keeps a profile file
+open and writes to it after the swap writes to the replaced copy, and that
+change is lost. Work directories are never loaded as profiles; ones left behind
+by a failed cleanup after a successful save can be deleted.
+
+Delete is rejected for `processing.default_profile` and for any profile still
+named by `processing.profile_settings`, `digest.profile_order`, profile-based
+`digest.category_groups`, or a source route. The error lists each reference so
+you can remove it first.
+
+Profiles and the config file are saved against the revision you loaded. The
+console compares the files with that revision again immediately before writing
+and rejects the save if they changed, for example in another tab or editor.
+For profile files, console processes that share a profile directory take turns
+through a `.console-lock` file in that directory. Opening a profile reads it
+under the same lock, and its revision is computed from exactly the content
+shown, so a save based on content that is no longer on disk is rejected. The config file has no such
+lock, and editors and other tools do not use it. A change made in the instant
+between the final comparison and the write is overwritten without warning.
+
+### Routing
+
+The Routing page changes only `processing.default_profile`,
+`processing.profile_settings` (`threshold` and `topic_dedup`), and the `profile`
+field of sources present in the config file. Each source can use:
+
+- **Automatic**: removes `profile`, so AI matches against every loaded profile.
+- **Fixed profile**: sets `profile` to one ID and skips AI matching.
+- **Candidates**: sets `profile` to an array and restricts AI matching to those
+  profiles.
+
+Other settings and `${VAR}` references are written back unchanged; the file is
+reformatted as two-space JSON. Saves pass the same profile reference checks that
+`horizon` performs at startup. To route a source that currently relies on
+defaults, such as Hacker News, add its section to the config file first.
+
+### Changes Without Restart
+
+`horizon` reads the config file and profile directory at the start of every run,
+so the next run uses saved changes without restarting a service or container.
+The Run page starts the pipeline with the console's data and config paths,
+shows the latest 300 log lines, and lists recent summaries. The log masks
+values of at least six characters from environment variables with
+credential-like names, from variables the config file references through
+`${VAR}` or `*_env` settings, and from plain strings under credential-like keys.
+It also masks URL user information, credential-like query parameters, and common
+authentication headers. Other output appears as the pipeline prints it.
+
+Saves are rejected only while a run started by the same console process is in
+progress. The console does not detect runs started any other way, such as the
+`horizon` command, cron jobs, or containers, so avoid saving while those run.
+
+With Docker Compose, the image contains its own copy of `profiles/`. To manage
+profiles for container runs, copy `profiles/` to `data/profiles/`, set
+`processing.profiles_dir` to `"data/profiles"`, and start the console on the
+host from the project directory. The next `docker compose run` reads the
+mounted files.
 
 ## Analysis
 

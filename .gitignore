@@ -59,6 +59,9 @@ logs/*.log
 # uv
 .uv/
 
+# Local console lock file in profile directories
+.console-lock
+
 # todo
 todo.txt
 .ruff_cache
