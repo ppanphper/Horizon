@@ -201,25 +201,14 @@ class HorizonOrchestrator:
         self.profiles = profiles or ProfileRegistry.load(
             Path(config.processing.profiles_dir), config.processing.default_profile
         )
-        self.profiles.validate_source_references(
-            config.sources.model_dump(mode="json")
-        )
-        for profile_id in config.processing.profile_settings:
-            self.profiles.get(profile_id)
+        self.profiles.validate_config_references(config)
         if config.digest.profile_order:
             configured_profiles = set(config.digest.profile_order)
-            unknown_profiles = configured_profiles - self.profiles.ids
-            if unknown_profiles:
-                raise ValueError(
-                    "digest.profile_order contains unknown profiles "
-                    f"({', '.join(sorted(unknown_profiles))})"
-                )
             config.digest.profile_order.extend(
                 profile.id
                 for profile in self.profiles.profiles
                 if profile.id not in configured_profiles
             )
-        self.profiles.validate_digest_references(config.digest)
         self.email_manager = EmailManager(config.email, console=self.console) if config.email else None
         self.webhook_notifier = (
             WebhookNotifier(config.webhook, console=self.console, icons=self.icons)

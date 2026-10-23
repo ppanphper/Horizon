@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 if TYPE_CHECKING:
-    from ..models import DigestConfig
+    from ..models import Config, DigestConfig
 
 BUILTIN_PROFILES_DIR = Path(__file__).resolve().parents[1] / "_builtin_profiles"
 
@@ -83,6 +83,20 @@ class ProfileRegistry:
         self._profiles = profiles
         self.default_profile = default_profile
 
+    @staticmethod
+    def resolve_root(profiles_dir: Path, *, base_dir: Optional[Path] = None) -> Path:
+        """Return the directory that ``load`` reads for ``profiles_dir``."""
+        if profiles_dir.is_absolute():
+            return profiles_dir.resolve()
+        root = ((base_dir or Path.cwd()) / profiles_dir).resolve()
+        if (
+            profiles_dir == Path("profiles")
+            and not root.is_dir()
+            and BUILTIN_PROFILES_DIR.is_dir()
+        ):
+            return BUILTIN_PROFILES_DIR
+        return root
+
     @classmethod
     def load(
         cls,
@@ -91,16 +105,7 @@ class ProfileRegistry:
         *,
         base_dir: Optional[Path] = None,
     ) -> "ProfileRegistry":
-        if profiles_dir.is_absolute():
-            root = profiles_dir.resolve()
-        else:
-            root = ((base_dir or Path.cwd()) / profiles_dir).resolve()
-            if (
-                profiles_dir == Path("profiles")
-                and not root.is_dir()
-                and BUILTIN_PROFILES_DIR.is_dir()
-            ):
-                root = BUILTIN_PROFILES_DIR
+        root = cls.resolve_root(profiles_dir, base_dir=base_dir)
         profiles: dict[str, LoadedProfile] = {}
         for config_path in sorted(root.glob("*/profile.json")):
             definition = ProfileDefinition.model_validate_json(
@@ -163,6 +168,19 @@ class ProfileRegistry:
         elif isinstance(value, list):
             for child in value:
                 self.validate_source_references(child)
+
+    def validate_config_references(self, config: "Config") -> None:
+        """Reject runtime configuration that names profiles this registry lacks."""
+        self.validate_source_references(config.sources.model_dump(mode="json"))
+        for profile_id in config.processing.profile_settings:
+            self.get(profile_id)
+        unknown_order = set(config.digest.profile_order) - self.ids
+        if unknown_order:
+            raise ValueError(
+                "digest.profile_order contains unknown profiles "
+                f"({', '.join(sorted(unknown_order))})"
+            )
+        self.validate_digest_references(config.digest)
 
     def validate_digest_references(self, digest: "DigestConfig") -> None:
         """Reject unknown profile IDs in profile-based digest quota groups."""

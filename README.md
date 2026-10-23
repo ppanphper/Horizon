@@ -224,7 +224,10 @@ array such as `["tech-news", "finance-news"]` to restrict AI matching to those
 profiles. See
 [Processing Profiles](docs/profiles.md) for profile structure and behavior.
 Per-profile user preferences such as score thresholds and topic deduplication
-belong in `processing.profile_settings`, not in the profile files.
+belong in `processing.profile_settings`, not in the profile files. To manage
+profiles and routing in a browser on the same machine, start the optional
+[local console](docs/profiles.md#local-console) with
+`uv run python -m src.web.server`.
 
 **Balanced digest (optional)**
 

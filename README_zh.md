@@ -233,7 +233,8 @@ cp data/config.example.json data/config.json  # 自定义信息源
 `"auto"` 时，AI 会在全部 Profile 中自动匹配。也可设置
 `["tech-news", "finance-news"]`，将匹配范围限定在这些候选项中，每条内容选一个。
 详见 [Profile 指南](docs/profiles.md)。筛选阈值和主题去重等个人偏好配置在
-`processing.profile_settings` 中。
+`processing.profile_settings` 中。如需在本机浏览器中管理 Profile 和路由，可运行
+`uv run python -m src.web.server` 启动可选的[本地控制台](docs/profiles.md#local-console)。
 
 **均衡日报（可选）**
 

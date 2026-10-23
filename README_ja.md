@@ -224,7 +224,9 @@ cp data/config.example.json data/config.json  # 情報源をカスタマイズ
 `["tech-news", "finance-news"]`のような配列で候補を絞ることもでき、記事ごとにひとつが選ばれます。構造と動作は
 [処理プロファイル](docs/profiles.md)を参照してください。スコアしきい値やトピック
 重複排除などのユーザー設定は、プロファイルファイルではなく
-`processing.profile_settings`に記述します。
+`processing.profile_settings`に記述します。同じマシンのブラウザでプロファイルと
+ルーティングを管理するには、`uv run python -m src.web.server` で任意の
+[ローカルコンソール](docs/profiles.md#local-console)を起動します。
 
 **バランス調整されたダイジェスト（オプション）**
 

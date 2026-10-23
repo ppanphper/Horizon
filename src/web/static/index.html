@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{CSRF_TOKEN}}">
+  <title>Horizon console</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>Horizon console</h1>
+    <nav aria-label="Sections">
+      <button type="button" data-view="profiles" aria-current="page">Profiles</button>
+      <button type="button" data-view="routing">Routing</button>
+      <button type="button" data-view="run">Run</button>
+    </nav>
+  </header>
+
+  <div id="message" role="status" aria-live="polite" hidden></div>
+
+  <main>
+    <section id="profiles" data-panel class="profiles">
+      <aside>
+        <ul id="profile-list" class="list"></ul>
+        <form id="new-profile-form" class="inline-form">
+          <label for="new-profile-id">New profile ID</label>
+          <input id="new-profile-id" name="id" required maxlength="64"
+                 pattern="[a-z][a-z0-9_\-]*" autocomplete="off">
+          <button type="submit">New</button>
+        </form>
+      </aside>
+
+      <div id="profile-editor" class="editor" hidden>
+        <div class="toolbar">
+          <h2 id="profile-title"></h2>
+          <button id="save-profile" type="button" class="primary">Save</button>
+          <button id="delete-profile" type="button" class="danger">Delete</button>
+        </div>
+        <p id="profile-status" class="status" hidden></p>
+        <form id="copy-form" class="inline-form">
+          <label for="copy-profile-id">Copy as</label>
+          <input id="copy-profile-id" name="id" required maxlength="64"
+                 pattern="[a-z][a-z0-9_\-]*" autocomplete="off">
+          <button type="submit">Copy</button>
+        </form>
+        <label for="definition">profile.json</label>
+        <textarea id="definition" rows="16" spellcheck="false"></textarea>
+        <label for="prompt-match">match.md</label>
+        <textarea id="prompt-match" rows="8"></textarea>
+        <label for="prompt-analysis">analysis.md</label>
+        <textarea id="prompt-analysis" rows="10"></textarea>
+        <label for="prompt-enrichment">enrichment.md</label>
+        <textarea id="prompt-enrichment" rows="10"></textarea>
+      </div>
+    </section>
+
+    <section id="routing" data-panel hidden>
+      <form id="routing-form">
+        <label for="default-profile">Default profile</label>
+        <select id="default-profile"></select>
+
+        <h2>Profile settings</h2>
+        <table>
+          <thead>
+            <tr><th scope="col">Profile</th><th scope="col">Threshold (0–10)</th><th scope="col">Topic deduplication</th></tr>
+          </thead>
+          <tbody id="settings-rows"></tbody>
+        </table>
+
+        <h2>Sources</h2>
+        <table>
+          <thead>
+            <tr><th scope="col">Source</th><th scope="col">Routing</th><th scope="col">Profiles</th></tr>
+          </thead>
+          <tbody id="source-rows"></tbody>
+        </table>
+
+        <button type="submit" class="primary">Save routing</button>
+      </form>
+    </section>
+
+    <section id="run" data-panel hidden>
+      <div class="toolbar">
+        <button id="start-run" type="button" class="primary">Run pipeline</button>
+        <span id="run-state" class="status"></span>
+      </div>
+      <pre id="run-log" hidden></pre>
+      <h2>Recent summaries</h2>
+      <ul id="summary-list" class="list"></ul>
+      <pre id="summary-view" hidden></pre>
+    </section>
+  </main>
+</body>
+</html>
