@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 import src.processing.profiles as profile_module
-from src.models import ProcessingConfig, ProfileSettingsConfig
+from src.models import Config, ProcessingConfig, ProfileSettingsConfig
 from src.processing import ProfileRegistry
 
 
@@ -66,6 +66,82 @@ def test_default_profiles_fall_back_to_packaged_resources(tmp_path, monkeypatch)
     registry = ProfileRegistry.load(Path("profiles"), "tech-news")
 
     assert registry.get("tech-news").analysis_prompt
+
+
+def test_resolve_root_matches_load_fallback(tmp_path, monkeypatch):
+    packaged_profiles = tmp_path / "packaged-profiles"
+    packaged_profiles.mkdir()
+    monkeypatch.setattr(profile_module, "BUILTIN_PROFILES_DIR", packaged_profiles)
+
+    assert (
+        ProfileRegistry.resolve_root(Path("profiles"), base_dir=tmp_path)
+        == packaged_profiles
+    )
+
+    (tmp_path / "profiles").mkdir()
+    assert (
+        ProfileRegistry.resolve_root(Path("profiles"), base_dir=tmp_path)
+        == (tmp_path / "profiles").resolve()
+    )
+
+
+def _config_with(**overrides):
+    payload = {
+        "ai": {"provider": "openai", "model": "gpt-4", "api_key_env": "OPENAI_API_KEY"},
+        "sources": {},
+    }
+    payload.update(overrides)
+    return Config.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        (
+            {"sources": {"rss": [{"name": "Feed", "url": "https://example.com/rss", "profile": "missing"}]}},
+            "Unknown processing profile: missing",
+        ),
+        (
+            {"processing": {"profile_settings": {"missing": {"threshold": 5}}}},
+            "Unknown processing profile: missing",
+        ),
+        (
+            {"digest": {"profile_order": ["missing"]}},
+            "digest.profile_order contains unknown profiles",
+        ),
+        (
+            {
+                "digest": {
+                    "group_by": "profile",
+                    "category_groups": {"news": {"limit": 3, "categories": ["missing"]}},
+                }
+            },
+            "digest.category_groups contains unknown profiles",
+        ),
+    ],
+)
+def test_validate_config_references_rejects_unknown_profiles(overrides, message):
+    registry = ProfileRegistry.load(
+        Path(__file__).resolve().parents[1] / "profiles", "tech-news"
+    )
+
+    with pytest.raises(ValueError, match=message):
+        registry.validate_config_references(_config_with(**overrides))
+
+
+def test_validate_config_references_accepts_known_profiles_without_mutation():
+    registry = ProfileRegistry.load(
+        Path(__file__).resolve().parents[1] / "profiles", "tech-news"
+    )
+    config = _config_with(
+        sources={"telegram": {"channels": [{"channel": "c", "profile": ["tech-news", "tech-blog"]}]}},
+        processing={"profile_settings": {"tech-blog": {"threshold": 4}}},
+        digest={"profile_order": ["tech-blog"]},
+    )
+
+    registry.validate_config_references(config)
+
+    assert config.digest.profile_order == ["tech-blog"]
 
 
 def test_rejects_runtime_filter_settings_in_profile(tmp_path):

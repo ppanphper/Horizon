@@ -59,7 +59,13 @@ logs/*.log
 # uv
 .uv/
 
+# Local console lock file in profile directories
+.console-lock
+
 # todo
 todo.txt
 .ruff_cache
 .pytest_cache
+
+# Local Web configuration backup
+data/config.json.web-backup

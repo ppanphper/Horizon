@@ -1,0 +1,47 @@
+name: horizon-local
+x-runtime: &runtime
+  image: horizon:web-local
+  build:
+    context: .
+    args:
+      HTTP_PROXY: http://host.docker.internal:1087
+      HTTPS_PROXY: http://host.docker.internal:1087
+  environment: &environment
+    TZ: Asia/Shanghai
+    UV_NO_SYNC: "1"
+    HTTP_PROXY: http://host.docker.internal:1087
+    HTTPS_PROXY: http://host.docker.internal:1087
+    NO_PROXY: localhost,127.0.0.1,::1,host.docker.internal
+services:
+  horizon:
+    <<: *runtime
+    profiles: [cli]
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+      - ./profiles:/app/profiles:ro
+      - ./docs/_posts:/app/docs/_posts
+    restart: "no"
+    command: ["--hours", "24"]
+  web:
+    <<: *runtime
+    environment:
+      <<: *environment
+      HORIZON_WEB_PUBLIC_PORT: "18764"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+      - ./profiles:/app/profiles
+      - ./docs/_posts:/app/docs/_posts
+    ports:
+      - "127.0.0.1:18764:8765"
+    entrypoint: ["/app/.venv/bin/python", "-m", "src.web.server"]
+    command: ["--host", "0.0.0.0", "--port", "8765"]
+    init: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

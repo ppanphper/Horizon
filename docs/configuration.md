@@ -106,7 +106,9 @@ automatic matching cannot select a profile:
 Each profile owns its matching, analysis, and enrichment behavior. Runtime
 filtering preferences stay in the main JSON configuration. See [Processing
 Profiles](profiles.md) for the file layout, complete schema, source routing
-rules, and block tool permissions.
+rules, and block tool permissions. The optional [local
+console](profiles.md#local-console) can edit `default_profile`,
+`profile_settings`, and source routes in place.
 
 ## AI Providers
 
