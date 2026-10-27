@@ -56,5 +56,20 @@ def test_create_from_current_content_rewrites_identity_and_prompt_paths():
     assert body["definition"]["enrichment"]["prompt"] == "enrichment.md"
 
 
+@pytest.mark.parametrize("api_key_env", [None, ""])
+def test_chatgpt_form_round_trip_does_not_inject_api_key_env(api_key_env):
+    from src.models import Config
+
+    ai = {"provider": "openai-chatgpt", "model": "gpt-5"}
+    if api_key_env is not None:
+        ai["api_key_env"] = api_key_env
+    collected = run_ui(
+        f'draft.ai = {json.dumps(ai)}; state.ai = {{model:"gpt-5"}}; '
+        'fillForm(); collect()'
+    )
+    assert not collected["ai"].get("api_key_env")
+    assert Config.model_validate(collected).ai.provider.value == "openai-chatgpt"
+
+
 def test_explicit_model_edit_is_saved():
     assert run_ui('$("model").value="edited"; collect().ai.model') == "edited"

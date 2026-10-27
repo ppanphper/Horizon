@@ -134,9 +134,10 @@ class ConsoleState:
 
             directory = env.get("HORIZON_CHATGPT_AUTH_DIR")
             try:
-                connected = ChatGPTAuth(Path(directory).expanduser() if directory else None).status(
+                session = ChatGPTAuth(Path(directory).expanduser() if directory else None).status(
                     config.ai.chatgpt_account
-                ).get("connected", False)
+                )
+                connected = session.get("connected", False) and session.get("plan_usage", False)
             except (AIProviderUnavailableError, OSError):
                 connected = False
             if not connected:

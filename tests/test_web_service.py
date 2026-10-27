@@ -68,6 +68,66 @@ def create_local_profile(service):
     return service.create_profile({"id": "local-test", "definition": DEFINITION, "prompts": PROMPTS})
 
 
+@pytest.mark.parametrize("operation", ["list", "get"])
+def test_profile_reads_wait_for_default_profile_directory_swap(service, project, monkeypatch, operation):
+    import os
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    from src.web.server import ConsoleState
+
+    service = ConsoleState(project).profiles_service
+    created = create_local_profile(service)
+    service.update_config(
+        {"revision": service.get_config()["revision"], "default_profile": "local-test"}
+    )
+    live = project / "profiles" / "local-test"
+    swapped_out, resume, read_started = (threading.Event() for _ in range(3))
+    rename = os.rename
+
+    def pause_after_backup(source, target):
+        rename(source, target)
+        if Path(source) == live:
+            swapped_out.set()
+            assert resume.wait(5), "Timed out waiting to complete directory swap"
+
+    monkeypatch.setattr(os, "rename", pause_after_backup)
+
+    def read():
+        read_started.set()
+        return service.list_profiles() if operation == "list" else service.get_profile("local-test")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        writer = pool.submit(service.update_profile, "local-test", {
+            "revision": created["revision"], "definition": DEFINITION,
+            "prompts": {**PROMPTS, "analysis": "Updated score."},
+        })
+        try:
+            assert swapped_out.wait(5)
+            reader = pool.submit(read)
+            assert read_started.wait(5)
+            # Give the reader an opportunity to enter config validation during the gap.
+            reader_done_during_swap = reader.done()
+            try:
+                reader.result(timeout=0.2)
+                reader_done_during_swap = True
+            except TimeoutError:
+                pass
+            except ConsoleError:
+                reader_done_during_swap = True
+        finally:
+            resume.set()
+        updated = writer.result(timeout=5)
+        result = reader.result(timeout=5)
+    assert not reader_done_during_swap
+    assert updated["prompts"]["analysis"] == "Updated score."
+    if operation == "list":
+        assert "local-test" in {item["id"] for item in result["profiles"]}
+    else:
+        assert result["revision"] == updated["revision"]
+        assert result["prompts"] == updated["prompts"]
+
+
 def test_delete_rejects_referenced_profile_and_names_references(service, project):
     create_local_profile(service)
     config = service.get_config()

@@ -57,13 +57,15 @@ class ConsoleService:
             yield
 
     def list_profiles(self) -> dict[str, Any]:
-        document = self.config.read()
-        return {"profiles": self.config.profile_store(document).list_profiles()}
+        with self._lock:
+            document = self.config.read()
+            return {"profiles": self.config.profile_store(document).list_profiles()}
 
     def get_profile(self, profile_id: str) -> dict[str, Any]:
-        document = self.config.read()
-        detail = self.config.profile_store(document).get_profile(profile_id)
-        return {**detail, "references": self.config.references(document, detail["id"])}
+        with self._lock:
+            document = self.config.read()
+            detail = self.config.profile_store(document).get_profile(profile_id)
+            return {**detail, "references": self.config.references(document, detail["id"])}
 
     def create_profile(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self._saving():

@@ -126,7 +126,7 @@ function fillForm() {
   $("model").value = state.ai.model || ""; $("base-url").value = state.ai.base_url || "";
   displayedAI = {model: $("model").value, base_url: $("base-url").value};
   $("api-key").value = ""; $("clear-key").checked = false;
-  $("key-env").value = ai.api_key_env ?? "HORIZON_AI_API_KEY";
+  $("key-env").value = ai.api_key_env ?? (ai.provider === "openai-chatgpt" ? "" : "HORIZON_AI_API_KEY");
   $("max-tokens").value = ai.max_tokens ?? 4096; $("temperature").value = ai.temperature ?? .3;
   $("concurrency").value = ai.analysis_concurrency ?? 1;
   $("key-badge").textContent = state.ai.key_configured ? "密钥已配置" : "未配置密钥";
