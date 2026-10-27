@@ -437,7 +437,7 @@ class HorizonOrchestrator:
             List[ContentItem]: All fetched items
         """
         self.last_fetch_report = None
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, http2=True) as client:
             tasks = []
 
             # GitHub sources

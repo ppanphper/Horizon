@@ -1,1 +1,1 @@
-"""Optional local web console for managing profiles and runtime routing."""
+"""Local web configuration and operations for Horizon."""

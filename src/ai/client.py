@@ -270,6 +270,9 @@ class OpenAIClient(AIClient):
         if self.provider in self._TEMP_CLAMP and temperature <= 0:
             temperature = 0.01
 
+        if self.config.api_protocol == "responses":
+            return await self._complete_responses(system, user, temperature, max_tokens)
+
         try:
             response = await self._do_request(
                 system=system,
@@ -310,6 +313,51 @@ class OpenAIClient(AIClient):
                 output_tokens=getattr(usage, "completion_tokens", 0),
             )
         return response.choices[0].message.content
+
+    async def _complete_responses(
+        self, system: str, user: str, temperature: float, max_tokens: int
+    ) -> str:
+        """Use /responses while keeping the pipeline's text/JSON contract."""
+        request_kwargs = {
+            "model": self.model,
+            # Send the original system message in input so gateway JSON-mode
+            # validators can see its output-format instruction.
+            "input": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "max_output_tokens": max_tokens,
+            "text": {"format": {"type": "json_object"}},
+            "store": False,
+        }
+        if self._supports_temperature:
+            request_kwargs["temperature"] = temperature
+        try:
+            response = await self.client.responses.create(**request_kwargs)
+        except Exception as exc:
+            if not self._supports_temperature or not self._is_temperature_unsupported(str(exc)):
+                raise
+            self._supports_temperature = False
+            request_kwargs.pop("temperature", None)
+            response = await self.client.responses.create(**request_kwargs)
+
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            record_usage(
+                self.provider,
+                input_tokens=getattr(usage, "input_tokens", 0) or 0,
+                output_tokens=getattr(usage, "output_tokens", 0) or 0,
+            )
+        status = getattr(response, "status", None)
+        if status is not None and status != "completed":
+            detail = getattr(response, "incomplete_details", None)
+            reason = getattr(detail, "reason", None)
+            suffix = f" ({reason})" if reason else ""
+            raise ValueError(f"Responses request did not complete: {status}{suffix}")
+        output = response.output_text
+        if not output or not output.strip():
+            raise ValueError("Empty response from Responses API (no output_text)")
+        return output
 
     async def _do_request(
         self,
@@ -671,6 +719,7 @@ def _create_chained_client(config: AIConfig) -> ChainedAIClient:
         base_url = config.base_url if provider == config.provider else defaults.get("base_url")
         cfg = AIConfig(
             provider=provider,
+            api_protocol=config.api_protocol if provider == config.provider else "chat_completions",
             model=(
                 config.model
                 if provider == config.provider and provider in {AIProvider.MINIMAX, AIProvider.OPENAI_CHATGPT}

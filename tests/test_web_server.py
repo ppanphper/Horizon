@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from src.web import server as web_server
-from src.web.server import MAX_BODY_BYTES, ConsoleServer
+from src.web import profile_server as web_server
+from src.web.profile_server import MAX_BODY_BYTES, ConsoleServer
 from src.web.service import ConsoleService
 
 REPO_PROFILES = Path(__file__).resolve().parents[1] / "profiles"

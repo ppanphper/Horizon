@@ -194,6 +194,7 @@ class AIConfig(BaseModel):
     """AI client configuration."""
 
     provider: AIProvider
+    api_protocol: Literal["chat_completions", "responses"] = "chat_completions"
     provider_chain: Optional[str] = None
     model: str
     base_url: Optional[str] = None
@@ -232,6 +233,14 @@ class AIConfig(BaseModel):
                 raise ValueError("ai.extra_body is not supported for openai-chatgpt preview requests")
             if self.api_key_env:
                 raise ValueError("openai-chatgpt uses OAuth; leave api_key_env empty")
+        return self
+
+    @model_validator(mode="after")
+    def validate_api_protocol(self) -> "AIConfig":
+        if self.api_protocol == "responses" and self.provider != AIProvider.OPENAI:
+            raise ValueError("Responses requires the openai compatible provider")
+        if self.api_protocol == "responses" and self.max_tokens < 16:
+            raise ValueError("Responses max_tokens must be at least 16")
         return self
 
     @field_validator("languages")
