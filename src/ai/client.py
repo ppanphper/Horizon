@@ -330,6 +330,8 @@ class OpenAIClient(AIClient):
             "text": {"format": {"type": "json_object"}},
             "store": False,
         }
+        if self.config.extra_body:
+            request_kwargs["extra_body"] = self.config.extra_body
         if self._supports_temperature:
             request_kwargs["temperature"] = temperature
         try:

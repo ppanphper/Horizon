@@ -4,6 +4,7 @@ const $ = (id) => document.getElementById(id);
 const clone = (value) => JSON.parse(JSON.stringify(value));
 let state, draft, dirty = false, jsonDirty = false, page = "overview", busy = false;
 let lastRunStatus = "idle";
+let displayedAI = {};
 const titles = {overview: "概览与日报", model: "AI 模型", sources: "信息源", rules: "日报规则", profiles: "Profile 管理", advanced: "高级配置", reader: "日报阅读"};
 let currentDigest = null, readerRequest = 0, readerMode = "formatted", readerObserver = null;
 
@@ -123,6 +124,7 @@ function fillForm() {
   $("api-protocol").value = ai.api_protocol || "chat_completions";
   updateProtocol();
   $("model").value = state.ai.model || ""; $("base-url").value = state.ai.base_url || "";
+  displayedAI = {model: $("model").value, base_url: $("base-url").value};
   $("api-key").value = ""; $("clear-key").checked = false;
   $("key-env").value = ai.api_key_env ?? "HORIZON_AI_API_KEY";
   $("max-tokens").value = ai.max_tokens ?? 4096; $("temperature").value = ai.temperature ?? .3;
@@ -144,7 +146,7 @@ function number(id, fallback = null) {
 }
 function collect() {
   const config = clone(draft);
-  config.ai = {...config.ai, provider: $("provider").value, api_protocol: $("provider").value === "openai" ? $("api-protocol").value : "chat_completions", model: $("model").value.trim(), base_url: $("base-url").value.trim() || null,
+  config.ai = {...config.ai, provider: $("provider").value, api_protocol: $("provider").value === "openai" ? $("api-protocol").value : "chat_completions", model: $("model").value === displayedAI.model ? draft.ai.model : $("model").value.trim(), base_url: $("base-url").value === displayedAI.base_url ? draft.ai.base_url : $("base-url").value.trim() || null,
     api_key_env: $("key-env").value.trim(), max_tokens: number("max-tokens", 4096), temperature: number("temperature", .3), analysis_concurrency: number("concurrency", 1),
     languages: [...(draft.ai.languages || []).filter(l => !["zh", "en"].includes(l)), ...[$("lang-zh").checked ? "zh" : null, $("lang-en").checked ? "en" : null].filter(Boolean)]};
   config.sources.hackernews = {...config.sources.hackernews, enabled: $("hn-enabled").checked, fetch_top_stories: number("hn-count", 30), min_score: number("hn-score", 100)};
@@ -152,8 +154,12 @@ function collect() {
   config.digest = {...config.digest, max_items: number("max-items")};
   config.collection = {...config.collection, time_window_hours: number("hours", 24)};
   config.processing = {...config.processing, default_profile: $("default-profile").value, profile_settings: {...config.processing?.profile_settings}};
-  state.profiles.forEach(p => config.processing.profile_settings[p.id] = {
-    ...config.processing.profile_settings[p.id], threshold: number(`threshold-${p.id}`), topic_dedup: $(`dedup-${p.id}`).checked
+  state.profiles.forEach(p => {
+    const setting = config.processing.profile_settings[p.id] || {};
+    const threshold = number(`threshold-${p.id}`), dedup = $(`dedup-${p.id}`).checked;
+    if (threshold !== (setting.threshold ?? null)) setting.threshold = threshold;
+    if (dedup !== (setting.topic_dedup !== false)) setting.topic_dedup = dedup;
+    if (Object.keys(setting).length) config.processing.profile_settings[p.id] = setting;
   });
   return config;
 }
@@ -410,7 +416,12 @@ async function profileAction(action) {
       const path = "/api/profiles/" + encodeURIComponent(profileDetail.id);
       const body = {definition: JSON.parse($("profile-definition").value), prompts: Object.fromEntries(["match", "analysis", "enrichment"].map(name => [name, $("profile-" + name).value])), revision: profileDetail.revision};
       if (action === "copy") await api(path + "/copy", {id: $("profile-new-id").value.trim()});
-      if (action === "create") await api("/api/profiles", {...body, id: $("profile-new-id").value.trim()});
+      if (action === "create") {
+        const id = $("profile-new-id").value.trim();
+        body.definition = {...body.definition, id, match: "match.md", analysis: "analysis.md",
+          enrichment: {...body.definition.enrichment, prompt: "enrichment.md"}};
+        await api("/api/profiles", {...body, id});
+      }
       if (action === "save") await api(path, body, "PUT");
       if (action === "delete") {
         if (!confirm("删除此 Profile？此操作不可撤销。")) return;

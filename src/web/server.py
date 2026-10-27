@@ -128,7 +128,20 @@ class ConsoleState:
             missing.append("模型名称")
         if config.ai.base_url and ENV_REF.search(config.ai.base_url):
             missing.append("API 地址")
-        if config.ai.provider.value != "ollama" and not env.get(config.ai.api_key_env, "").strip():
+        if config.ai.provider.value == "openai-chatgpt":
+            from ..ai.chatgpt_auth import ChatGPTAuth
+            from ..ai.errors import AIProviderUnavailableError
+
+            directory = env.get("HORIZON_CHATGPT_AUTH_DIR")
+            try:
+                connected = ChatGPTAuth(Path(directory).expanduser() if directory else None).status(
+                    config.ai.chatgpt_account
+                ).get("connected", False)
+            except (AIProviderUnavailableError, OSError):
+                connected = False
+            if not connected:
+                missing.append("ChatGPT 登录（horizon-chatgpt login）")
+        elif config.ai.provider.value != "ollama" and not env.get(config.ai.api_key_env, "").strip():
             missing.append("API 密钥")
         if config.ai.provider.value == "azure" and not env.get(config.ai.azure_endpoint_env or "AZURE_OPENAI_ENDPOINT"):
             missing.append("Azure endpoint 环境变量")

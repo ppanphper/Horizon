@@ -110,7 +110,9 @@ class ConsoleService:
             return {"deleted": profile_id}
 
     def get_config(self) -> dict[str, Any]:
-        return self.config.snapshot()
+        # Validation loads the default profile; do not observe a writer's directory swap.
+        with self._lock:
+            return self.config.snapshot()
 
     def update_config(self, payload: dict[str, Any]) -> dict[str, Any]:
         with self._saving():

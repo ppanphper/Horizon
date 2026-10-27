@@ -43,6 +43,30 @@ def install_transport(monkeypatch, handler):
     monkeypatch.setattr(clients, "AsyncOpenAI", factory)
 
 
+def test_responses_extra_body_survives_temperature_retry(monkeypatch):
+    bodies = []
+    def handler(request):
+        body = json.loads(request.content)
+        bodies.append(body)
+        if "temperature" in body:
+            return httpx.Response(400, json={"error": {"message": "Unsupported parameter: temperature", "type": "invalid_request_error"}})
+        return httpx.Response(200, json=response_payload())
+    install_transport(monkeypatch, handler)
+    extra = {"reasoning": {"effort": "low"}, "metadata": {"source": "horizon"}}
+    async def run():
+        client = clients.create_ai_client(config(extra_body=extra))
+        try:
+            assert await client.complete("Return JSON", "news") == '{"score":8}'
+        finally:
+            await client.client.close()
+    asyncio.run(run())
+    assert len(bodies) == 2
+    for body in bodies:
+        assert body.get("reasoning") == extra["reasoning"]
+        assert body.get("metadata") == extra["metadata"]
+    assert extra == {"reasoning": {"effort": "low"}, "metadata": {"source": "horizon"}}
+
+
 def test_responses_request_schema_endpoint_output_and_usage(monkeypatch):
     seen = []
     def handler(request):

@@ -89,6 +89,49 @@ def test_profile_crud_routing_revision_and_run_lock(console):
     assert legacy["config"]["ai"]["api_protocol"] == "responses"
 
 
+def test_routing_read_waits_for_default_profile_directory_swap(console, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from src.web import profiles
+
+    status, created = request(console, "POST", "/api/profiles/tech-news/copy", {"id": "local-default"})
+    assert status == 201
+    routing = request(console, "GET", "/api/profile-routing")[1]
+    routing["default_profile"] = "local-default"
+    assert request(console, "PUT", "/api/profile-routing", routing)[0] == 200
+    removed, release, reading = threading.Event(), threading.Event(), threading.Event()
+    rename = profiles.os.rename
+
+    def paused_rename(source, target):
+        rename(source, target)
+        if Path(source) == console.state.root / "profiles/local-default":
+            removed.set()
+            assert release.wait(5)
+
+    def read():
+        reading.set()
+        return request(console, "GET", "/api/profile-routing")
+
+    monkeypatch.setattr(profiles.os, "rename", paused_rename)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        update = pool.submit(request, console, "PUT", "/api/profiles/local-default", created)
+        try:
+            assert removed.wait(5)
+            result = pool.submit(read)
+            assert reading.wait(5)
+            try:
+                result.result(timeout=.2)
+            except TimeoutError:
+                pass
+            else:
+                pytest.fail("Routing read completed while the default profile directory was absent")
+        finally:
+            release.set()
+        assert update.result(timeout=5)[0] == 200
+        status, document = result.result(timeout=5)
+        assert status == 200
+        assert document["default_profile"] == "local-default"
+
+
 def test_profile_editor_is_part_of_original_ui(console):
     status, html = request(console, "GET", "/")
     assert status == 200
